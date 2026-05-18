@@ -1,11 +1,6 @@
 "use client";
-import React, { use, useEffect, useState } from "react";
+import React, { useState } from "react";
 import SimliOpenAI from "./SimliOpenAI";
-import DottedFace from "./Components/DottedFace";
-import SimliHeaderLogo from "./Components/Logo";
-import Navbar from "./Components/Navbar";
-import Image from "next/image";
-import GitHubLogo from "@/media/github-mark-white.svg";
 
 interface avatarSettings {
   name: string;
@@ -17,12 +12,12 @@ interface avatarSettings {
 
 // Customize your avatar here
 const avatar: avatarSettings = {
-  name: "Frank",
-  openai_voice: "echo",
-  openai_model: "gpt-4o-mini-realtime-preview-2024-12-17", // Use "gpt-4o-mini-realtime-preview-2024-12-17" for cheaper and faster responses
-  simli_faceid: "6ebf0aa7-6fed-443d-a4c6-fd1e3080b215",
+  name: "Tina",
+  openai_voice: "shimmer", // Set to OpenAI's premium female voice (Google TTS proxy defaults to a natural female voice)
+  openai_model: "gemini-3-flash-preview", // Fully updated to Gemini 3 Flash for maximum speed & lower costs
+  simli_faceid: "cace3ef7-a4c4-425d-a8cf-a5358eb0c427", // Tina's official female Face ID
   initialPrompt:
-    "You are a helpful AI assistant named Frank. You are friendly and concise in your responses. Your task is to help users with any questions they might have. Your answers are short and to the point, don't give long answers be brief and straightforward.",
+    "You are a helpful female AI assistant named Tina. You are friendly and concise in your responses. Your task is to help users with any questions they might have. Your answers are short and to the point, don't give long answers be brief and straightforward.",
 };
 
 const Demo: React.FC = () => {
@@ -40,57 +35,36 @@ const Demo: React.FC = () => {
 
   return (
     <div className="bg-black min-h-screen flex flex-col items-center font-abc-repro font-normal text-sm text-white p-8">
-      <SimliHeaderLogo />
-      <Navbar />
-      <div className="absolute top-[32px] right-[32px]">
-        <text
-          onClick={() => {
-            window.open("https://github.com/simliai/create-simli-app-openai");
-          }}
-          className="font-bold cursor-pointer mb-8 text-xl leading-8"
-        >
-          <Image className="w-[20px] inline mr-2" src={GitHubLogo} alt="" />
-          create-simli-app (OpenAI)
-        </text>
-      </div>
-      <div className="flex flex-col items-center gap-6 bg-effect15White p-6 pb-[40px] rounded-xl w-full">
-        <div>
-          {showDottedFace && <DottedFace />}
-          <SimliOpenAI
-            openai_voice={avatar.openai_voice}
-            openai_model={avatar.openai_model}
-            simli_faceid={avatar.simli_faceid}
-            initialPrompt={avatar.initialPrompt}
-            onStart={onStart}
-            onClose={onClose}
-            showDottedFace={showDottedFace}
-          />
+      {/* Sleek, glowing brand header */}
+      <div className="w-full max-w-6xl flex justify-between items-center mb-6 border-b border-zinc-900 pb-6 animate-fadeIn">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-indigo-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+          <span className="text-sm font-semibold tracking-wider text-zinc-300 font-mono uppercase">
+            Gemini Interactive Console
+          </span>
+        </div>
+        <div className="text-xs text-zinc-550 font-mono hidden sm:block">
+          Pipeline: Active | Model: {avatar.openai_model}
         </div>
       </div>
 
-      <div className="max-w-[350px] font-thin flex flex-col items-center ">
-        <span className="font-bold mb-[8px] leading-5 ">
-          {" "}
-          Create Simli App is a starter repo for creating visual avatars with
-          Simli{" "}
-        </span>
-        <ul className="list-decimal list-inside max-w-[350px] ml-[6px] mt-2">
-          <li className="mb-1">
-            Fill in your OpenAI and Simli API keys in .env file.
-          </li>
-          <li className="mb-1">
-            Test out the interaction and have a talk with the OpenAI-powered,
-            Simli-visualized avatar.
-          </li>
-          <li className="mb-1">
-            You can replace the avatar's face and prompt with your own. Do this
-            by editing <code>app/page.tsx</code>.
-          </li>
-        </ul>
-        <span className=" mt-[16px]">
-          You can now deploy this app to Vercel, or incorporate it as part of
-          your existing project.
-        </span>
+      <div className="w-full max-w-6xl mt-2 mb-8 animate-fadeIn">
+        <SimliOpenAI
+          openai_voice={avatar.openai_voice}
+          openai_model={avatar.openai_model}
+          simli_faceid={avatar.simli_faceid}
+          initialPrompt={avatar.initialPrompt}
+          onStart={onStart}
+          onClose={onClose}
+          showDottedFace={showDottedFace}
+          avatarName={avatar.name}
+        />
+      </div>
+
+      {/* Minimalist professional footer */}
+      <div className="w-full max-w-6xl mt-6 pt-6 border-t border-zinc-900 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-zinc-600 font-mono animate-fadeIn">
+        <span>© 2026 Conversational Agent Interface. All rights reserved.</span>
+        <span>Secure Audio-Visual Pipeline (P2P WebRTC)</span>
       </div>
     </div>
   );
