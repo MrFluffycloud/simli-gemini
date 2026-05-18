@@ -32,6 +32,17 @@ interface ChatMessage {
     isStreaming?: boolean;
 }
 
+const getErrorMessage = (err: any): string => {
+    if (!err) return "Unknown connection error";
+    if (typeof err === "string") return err;
+    if (err instanceof Error) return err.message;
+    if (err.message) return err.message;
+    // Extract server-side API or proxy details
+    if (err.response?.data?.message) return err.response.data.message;
+    if (err.response?.data) return typeof err.response.data === "string" ? err.response.data : JSON.stringify(err.response.data);
+    return JSON.stringify(err);
+};
+
 let simliClient: SimliClient | null = null;
 
 const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
@@ -196,8 +207,9 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
                 sessionToken = tokenResponse.session_token;
                 logDebug(`Session token successfully generated: ${sessionToken.slice(0, 10)}...`, "success");
             } catch (err: any) {
-                logDebug(`Session token fetch failed: ${err.message}`, "error");
-                throw err;
+                const detailedError = getErrorMessage(err);
+                logDebug(`Session token fetch failed: ${detailedError}`, "error");
+                throw new Error(detailedError);
             }
 
             let iceServers = [];
@@ -206,8 +218,9 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
                 iceServers = await generateIceServers(simliApiKey);
                 logDebug(`ICE Servers received successfully (Count: ${iceServers.length})`, "success");
             } catch (err: any) {
-                logDebug(`ICE server fetch failed: ${err.message}`, "error");
-                throw err;
+                const detailedError = getErrorMessage(err);
+                logDebug(`ICE server fetch failed: ${detailedError}`, "error");
+                throw new Error(detailedError);
             }
 
             logDebug("Instantiating WebRTC Peer SimliClient...", "info");
@@ -276,8 +289,9 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
             isAvatarVisibleRef.current = true;
             logDebug("Avatar video feed active. Awaiting user speech...", "info");
         } catch (error: any) {
-            logDebug(`Failed to initialize Gemini: ${error.message}`, "error");
-            setError(`Failed to initialize Gemini: ${error.message}`);
+            const detailedError = getErrorMessage(error);
+            logDebug(`Failed to initialize Gemini: ${detailedError}`, "error");
+            setError(`Failed to initialize Gemini: ${detailedError}`);
             setStatusMessage("Gemini failed to initialize");
         }
     }, [initialPrompt, openai_model]);
@@ -362,8 +376,9 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
             setStatusMessage(isRecordingRef.current ? "Microphone active. Listening..." : "Agent online. Speak or type below.");
 
         } catch (err: any) {
-            logDebug(`Gemini stream generation failed: ${err.message}`, "error");
-            setError(`Error generating response: ${err.message}`);
+            const detailedError = getErrorMessage(err);
+            logDebug(`Gemini stream generation failed: ${detailedError}`, "error");
+            setError(`Error generating response: ${detailedError}`);
             setStatusMessage("Response error");
         } finally {
             setIsGenerating(false);
@@ -500,8 +515,20 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
                     setIsRecording(false);
                     isRecordingRef.current = false;
                     setStatusMessage("Microphone offline (Permission Blocked). Keyboard active.");
+                } else if (event.error === "network") {
+                    setError("Speech recognition network error. The browser's built-in transcription service is unable to reach Google's servers. This is common on slow internet connections, networks with strict firewalls/DNS filters, or corporate proxies. You can continue talking to Tina by typing in the chat box below!");
+                    // Gracefully halt the continuous loop to prevent rapid infinite crash loop spamming
+                    isMutedRef.current = true;
+                    setIsRecording(false);
+                    isRecordingRef.current = false;
+                    setStatusMessage("Microphone offline (Network Blocked). Keyboard active.");
                 } else {
                     setError(`Speech recognition error: ${event.error}`);
+                    // For other unknown fatal errors, halt loop as a safety measure
+                    isMutedRef.current = true;
+                    setIsRecording(false);
+                    isRecordingRef.current = false;
+                    setStatusMessage("Microphone offline (System Error). Keyboard active.");
                 }
             };
 
@@ -647,8 +674,9 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
         try {
             await initializeSimliClient();
         } catch (error: any) {
-            logDebug(`Visual stream startup crashed: ${error.message}`, "error");
-            setError(`Error starting interaction: ${error.message}`);
+            const detailedError = getErrorMessage(error);
+            logDebug(`Visual stream startup crashed: ${detailedError}`, "error");
+            setError(`Error starting interaction: ${detailedError}`);
         } finally {
             setIsLoading(false);
         }
