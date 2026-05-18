@@ -64,6 +64,9 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
     // Refs for preventing stale closures in event listeners
     const isRecordingRef = useRef(false);
     const isGeneratingRef = useRef(false);
+    const isMutedRef = useRef(true);
+    const playbackEndTimestampRef = useRef<number>(0);
+    const isAvatarVisibleRef = useRef(false);
 
     // Refs for various components and states
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -270,8 +273,8 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
             logDebug(`GoogleGenAI successfully connected (Model: ${openai_model})`, "success");
 
             setIsAvatarVisible(true);
-            logDebug("Activating continuous microphone capture...", "info");
-            startRecording();
+            isAvatarVisibleRef.current = true;
+            logDebug("Avatar video feed active. Awaiting user speech...", "info");
         } catch (error: any) {
             logDebug(`Failed to initialize Gemini: ${error.message}`, "error");
             setError(`Failed to initialize Gemini: ${error.message}`);
@@ -394,6 +397,13 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
             const decodedBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
             const channelData = decodedBuffer.getChannelData(0); // float32
 
+            // Track exact playback duration to prevent microphone self-hearing echo loop
+            const durationMs = decodedBuffer.duration * 1000;
+            const now = Date.now();
+            const startTimestamp = Math.max(now, playbackEndTimestampRef.current);
+            playbackEndTimestampRef.current = startTimestamp + durationMs;
+            logDebug(`Speech segment duration: ${durationMs.toFixed(0)}ms (Playback scheduled until ${new Date(playbackEndTimestampRef.current).toLocaleTimeString()})`, "info");
+
             // Convert Float32 values to standard signed Int16 PCM (16000Hz)
             const pcmData = new Int16Array(channelData.length);
             for (let i = 0; i < channelData.length; i++) {
@@ -475,22 +485,53 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
                 logDebug("Microphone captures active. Speech recognizer started.", "success");
                 setIsRecording(true);
                 isRecordingRef.current = true;
+                isMutedRef.current = false;
                 setStatusMessage("Microphone active. Listening...");
             };
 
             recognition.onerror = (event: any) => {
                 logDebug(`Speech recognition warning/error: ${event.error}`, "error");
                 if (event.error === "no-speech") return;
-                setError(`Speech recognition error: ${event.error}`);
+                
+                if (event.error === "not-allowed") {
+                    setError("Microphone permission blocked. Please click the Lock/Microphone icon in your browser's address bar (next to 'localhost:3001') and choose 'Allow' to enable continuous speech interaction. You can still type in the text chat box below to talk to Tina!");
+                    // Gracefully fail over: configure manual muted states so keyboard-chat remains fully functional
+                    isMutedRef.current = true;
+                    setIsRecording(false);
+                    isRecordingRef.current = false;
+                    setStatusMessage("Microphone offline (Permission Blocked). Keyboard active.");
+                } else {
+                    setError(`Speech recognition error: ${event.error}`);
+                }
             };
 
             recognition.onend = () => {
                 logDebug("Speech recognizer disconnected.", "info");
-                setIsRecording(false);
-                isRecordingRef.current = false;
+                
+                // Continuous Speech Recognition Auto-Restart Loop:
+                // Auto-restarts the speech recognizer after silence timeouts, only if the user hasn't manually muted.
+                if (isAvatarVisible && !isMutedRef.current) {
+                    logDebug("Continuous Loop: Auto-restarting speech recognizer...", "info");
+                    setTimeout(() => {
+                        if (isAvatarVisible && !isMutedRef.current) {
+                            startRecording();
+                        }
+                    }, 250);
+                } else {
+                    setIsRecording(false);
+                    isRecordingRef.current = false;
+                }
             };
 
             recognition.onresult = async (event: any) => {
+                const now = Date.now();
+                const isSpeaking = now < playbackEndTimestampRef.current + 800; // 800ms cool-down
+                
+                if (isGeneratingRef.current || isSpeaking || !isAvatarVisibleRef.current) {
+                    // Ignore mic input while the AI brain is thinking, the avatar is speaking, or the video feed is connecting
+                    return;
+                }
+
                 let interimTranscript = "";
                 let finalTranscript = "";
 
@@ -539,6 +580,7 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
      * Stops Speech recognition
      */
     const stopRecording = useCallback(() => {
+        isMutedRef.current = true; // Mark as muted to prevent continuous loop from auto-restarting
         if (recognitionRef.current) {
             logDebug("Stopping voice transcription capture...", "info");
             recognitionRef.current.stop();
@@ -558,6 +600,7 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
             setStatusMessage("Microphone muted. Type your messages below.");
         } else {
             logDebug("Microphone manually activated by user.", "info");
+            isMutedRef.current = false;
             startRecording();
         }
     };
@@ -592,6 +635,11 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
      */
     const handleStart = useCallback(async () => {
         logDebug("Connection request triggered by user...", "info");
+        
+        // Synchronously initialize the speech recognition directly in the user click gesture!
+        // This ensures the browser grants microphone access cleanly and avoids the 'not-allowed' error.
+        startRecording();
+
         setIsLoading(true);
         setError("");
         onStart();
@@ -615,6 +663,7 @@ const SimliOpenAI: React.FC<SimliOpenAIProps> = ({
         setError("");
         stopRecording();
         setIsAvatarVisible(false);
+        isAvatarVisibleRef.current = false;
         if (simliClient) {
             await simliClient.stop();
             simliClient = null;
